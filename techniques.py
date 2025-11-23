@@ -57,3 +57,77 @@ class SelfConsistency:
             "answer": final_answer,
             "all_answers": answers
         }
+    
+
+class ProblemDecomposition:
+    def __init__(self, client: APIClient):
+        self.client = client
+    
+    def solve(self, question: str) -> Dict[str, Any]:
+        system = "You are a helpful assistant."
+        
+        decompose_prompt = f"Break down this problem into smaller steps:\n\n{question}\n\nWhat steps do we need?"
+        
+        decompose_result = self.client.call(
+            decompose_prompt,
+            system=system,
+            temperature=0.3,
+            max_tokens=1024
+        )
+        
+        if not decompose_result["ok"]:
+            fallback = ChainOfThought(self.client)
+            return fallback.solve(question)
+        
+        steps_text = decompose_result["text"]
+        lines = [line.strip() for line in steps_text.split('\n') if line.strip()]
+        
+        steps = []
+        for line in lines:
+            cleaned = line.lstrip('0123456789.-) ')
+            if len(cleaned) > 10:
+                steps.append(cleaned)
+        
+        if len(steps) > 4:
+            steps = steps[:4]
+        
+        if not steps:
+            fallback = ChainOfThought(self.client)
+            return fallback.solve(question)
+        
+        step_results = []
+        for step in steps:
+            step_prompt = f"{step}\n\nAnswer this:"
+            step_result = self.client.call(
+                step_prompt,
+                system=system,
+                temperature=0.3,
+                max_tokens=512
+            )
+            if step_result["ok"]:
+                step_results.append(step_result["text"].strip())
+        
+        synthesis_prompt = f"Original question: {question}\n\n"
+        synthesis_prompt += "Information gathered:\n"
+        
+        for idx, (s, r) in enumerate(zip(steps, step_results)):
+            synthesis_prompt += f"{idx+1}. {s}\n{r}\n\n"
+        
+        synthesis_prompt += "What is the final answer to the original question?"
+        
+        synthesis_result = self.client.call(
+            synthesis_prompt,
+            system=system,
+            temperature=0.3,
+            max_tokens=1024
+        )
+        
+        final_answer = ""
+        if synthesis_result["ok"]:
+            final_answer = extract_final_answer(synthesis_result["text"])
+        
+        return {
+            "answer": final_answer,
+            "steps": steps
+        }
+
