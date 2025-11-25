@@ -62,3 +62,54 @@ class ReasoningAgent:
             "reasoning": reasoning_text
         }
     
+
+
+    def _pick_strategy(self, question: str, domain: Optional[str] = None) -> str:
+        q = question.lower()
+        
+        words_indicating_steps = ["first", "then", "after", "next", "finally"]
+        has_steps = any(w in q for w in words_indicating_steps)
+        
+        if "calculate" in q or "compute" in q:
+            if has_steps or len(question) > 200:
+                return "decomposition"
+        
+        if domain == "math" and ("and" in q or "then" in q):
+            return "decomposition"
+        
+        logic_words = ["who", "which", "what position", "race"]
+        if any(w in q for w in logic_words):
+            if len(question) < 150:
+                return "self_consistency"
+        
+        return "cot"
+    
+    def _run_cot(self, question: str) -> Dict[str, Any]:
+        result = self.cot.solve(question)
+        return {
+            "answer": result["answer"],
+            "technique": "chain_of_thought",
+            "full_response": result.get("full_response", "")
+        }
+    
+    def _run_self_consistency(self, question: str) -> Dict[str, Any]:
+        result = self.self_consistency.solve(question)
+        all_ans = result.get("all_answers", [])
+        combined = ", ".join(all_ans)
+        return {
+            "answer": result["answer"],
+            "technique": "self_consistency",
+            "full_response": f"Answers: {combined}"
+        }
+    
+    def _run_decomposition(self, question: str) -> Dict[str, Any]:
+        result = self.decomposition.solve(question)
+        steps = result.get("steps", [])
+        steps_text = "; ".join(steps)
+        return {
+            "answer": result["answer"],
+            "technique": "decomposition",
+            "full_response": f"Steps: {steps_text}"
+        }
+
+    
