@@ -142,3 +142,39 @@ def process_questions(
     }
     execution_log.insert(0, {"summary": summary})
     return answers, execution_log
+
+
+
+
+def main():
+    logger.info("Starting answer generation process...")
+
+    if not INPUT_PATH.exists():
+        logger.error(f"Input file not found: {INPUT_PATH}")
+        logger.error("Please ensure cse_476_final_project_test_data.json is in the current directory")
+        return
+
+    questions = load_questions(INPUT_PATH)
+
+    logger.info("Initializing reasoning agent...")
+    agent = ReasoningAgent(
+        api_key="cse476",
+        api_base="http://10.4.58.53:41701/v1",
+        model="bens_model",
+        max_calls_per_question=18
+    )
+
+    answers, execution_log = process_questions(questions, agent, save_interval=10)
+
+    save_answers(answers, OUTPUT_PATH)
+    save_execution_log(execution_log, LOG_PATH)
+
+    validate_answers(questions, answers)
+
+    logger.info(f"\nSuccessfully generated {len(answers)} answers")
+    logger.info(f"Answers saved to: {OUTPUT_PATH}")
+    logger.info(f"Execution log saved to: {LOG_PATH}")
+
+
+if __name__ == "__main__":
+    main()
