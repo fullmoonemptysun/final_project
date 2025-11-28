@@ -1,0 +1,123 @@
+import json
+import logging
+import time
+from pathlib import Path
+from typing import List, Dict, Any
+from agent import ReasoningAgent
+
+logging.basicConfig(
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+INPUT_PATH = Path("cse_476_final_project_test_data.json")
+OUTPUT_PATH = Path("cse_476_final_project_answers.json")
+
+
+def load_questions(path: Path) -> List[Dict[str, Any]]:
+    logger.info(f"Loading questions from {path}")
+    with path.open("r") as fp:
+        data = json.load(fp)
+    
+    if not isinstance(data, list):
+        raise ValueError("Input file must contain a list of question objects.")
+    
+    logger.info(f"Loaded {len(data)} questions")
+    return data
+
+
+def save_answers(answers: List[Dict[str, str]], path: Path) -> None:
+    logger.info(f"Saving {len(answers)} answers to {path}")
+    with path.open("w") as fp:
+        json.dump(answers, fp, ensure_ascii=False, indent=2)
+
+
+def validate_answers(
+    questions: List[Dict[str, Any]], 
+    answers: List[Dict[str, Any]]
+) -> None:
+    logger.info("Validating answers format...")
+    
+    if len(questions) != len(answers):
+        raise ValueError(
+            f"Mismatched lengths: {len(questions)} questions vs {len(answers)} answers."
+        )
+    
+    for idx, answer in enumerate(answers):
+        if "output" not in answer:
+            raise ValueError(f"Missing 'output' field for answer index {idx}.")
+        
+        if not isinstance(answer["output"], str):
+            raise TypeError(
+                f"Answer at index {idx} has non-string output: {type(answer['output'])}"
+            )
+        
+        if len(answer["output"]) >= 5000:
+            raise ValueError(
+                f"Answer at index {idx} exceeds 5000 characters."
+            )
+    
+    logger.info("All answers passed validation")
+
+
+def process_questions(questions: List[Dict[str, Any]], agent: ReasoningAgent):
+    answers = []
+    total = len(questions)
+    start_time = time.time()
+    
+    for idx, question_data in enumerate(questions, start=1):
+        question_text = question_data.get("input", "")
+        domain = question_data.get("domain", None)
+        
+        logger.info(f"Processing question {idx}/{total}")
+        
+        try:
+            result = agent.solve(question_text, domain=domain)
+            answer = result["answer"]
+            answers.append({"output": answer})
+            
+            if idx % 10 == 0:
+                logger.info(f"Saving progress at question {idx}/{total}")
+                save_answers(answers, OUTPUT_PATH)
+            
+            time.sleep(0.5)
+            
+        except Exception as e:
+            logger.error(f"Error processing question {idx}: {e}")
+            answers.append({"output": "Error: Unable to generate answer"})
+    
+    total_time = time.time() - start_time
+    logger.info(f"Processing complete. Total time: {total_time:.2f}s")
+    
+    return answers
+
+
+def main():
+    logger.info("Starting answer generation process...")
+    
+    if not INPUT_PATH.exists():
+        logger.error(f"Input file not found: {INPUT_PATH}")
+        return
+    
+    questions = load_questions(INPUT_PATH)
+    
+    logger.info("Initializing reasoning agent...")
+    agent = ReasoningAgent(
+        api_key="cse476",
+        api_base="http://10.4.58.53:41701/v1",
+        model="bens_model",
+        max_calls_per_question=18
+    )
+    
+    answers = process_questions(questions, agent)
+    
+    save_answers(answers, OUTPUT_PATH)
+    validate_answers(questions, answers)
+    
+    logger.info(f"Successfully generated {len(answers)} answers")
+    logger.info(f"Answers saved to: {OUTPUT_PATH}")
+
+
+if __name__ == "__main__":
+    main()
