@@ -62,3 +62,83 @@ def validate_answers(
                 f"({len(answer['output'])} chars). "
                 "Please ensure output contains only the final answer."
             )
+
+
+def process_questions(
+    questions: List[Dict[str, Any]],
+    agent: ReasoningAgent,
+    save_interval: int = 10
+) -> tuple[List[Dict[str, str]], List[Dict[str, Any]]]:
+    answers = []
+    execution_log = []
+
+    total = len(questions)
+    start_time = time.time()
+
+    for idx, question_data in enumerate(questions, start=1):
+        q_start = time.time()
+        question_text = question_data.get("input", "")
+        domain = question_data.get("domain", None)
+
+        logger.info(f"\n{'='*60}")
+        logger.info(f"Processing question {idx}/{total}")
+        logger.info(f"Domain: {domain}")
+        logger.info(f"Question: {question_text[:100]}...")
+
+        try:
+            result = agent.solve(question_text, domain=domain)
+            answer = result["answer"]
+            answers.append({"output": answer})
+            q_elapsed = time.time() - q_start
+            log_entry = {
+                "question_id": idx,
+                "domain": domain,
+                "question": question_text,
+                "answer": answer,
+                "technique": result["technique_used"],
+                "api_calls": result["call_count"],
+                "time_seconds": round(q_elapsed, 2),
+                "reasoning_summary": result["reasoning"][:500] if result["reasoning"] else ""
+            }
+            execution_log.append(log_entry)
+
+            logger.info(f"Answer: {answer}")
+            logger.info(f"Technique: {result['technique_used']}")
+            logger.info(f"API calls: {result['call_count']}")
+            logger.info(f"Time: {q_elapsed:.2f}s")
+
+            if idx % save_interval == 0:
+                logger.info(f"\n>>> Saving progress at question {idx}/{total}")
+                save_answers(answers, OUTPUT_PATH)
+                save_execution_log(execution_log, LOG_PATH)
+
+            time.sleep(0.5)
+
+        except Exception as e:
+            logger.error(f"Error processing question {idx}: {e}")
+            answers.append({"output": "Error: Unable to generate answer"})
+            execution_log.append({
+                "question_id": idx,
+                "domain": domain,
+                "question": question_text,
+                "error": str(e),
+                "time_seconds": round(time.time() - q_start, 2)
+            })
+
+    total_time = time.time() - start_time
+    logger.info(f"\n{'='*60}")
+    logger.info(f"Processing complete!")
+    logger.info(f"Total time: {total_time:.2f}s")
+    logger.info(f"Average time per question: {total/total:.2f}s")
+
+    summary = {
+        "total_questions": total,
+        "total_time_seconds": round(total_time, 2),
+        "average_time_per_question": round(total_time / total, 2),
+        "total_api_calls": sum(e.get("api_calls", 0) for e in execution_log),
+        "average_api_calls_per_question": round(
+            sum(e.get("api_calls", 0) for e in execution_log) / total, 2
+        )
+    }
+    execution_log.insert(0, {"summary": summary})
+    return answers, execution_log
