@@ -157,7 +157,7 @@ The agent uses deterministic settings where possible (temperature 0.3-0.7) but S
 
 - All commits tracked with ~100 line increments
 - Git history shows progression: API client → utils → techniques → agent → execution
-- Developed over Nov 22 - Dec 6, 2024
+- Developed over Nov 15 - Dec 6, 2025
 - Tested on development dataset before final run
 
 ## Contact
