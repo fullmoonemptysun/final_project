@@ -160,10 +160,4 @@ The agent uses deterministic settings where possible (temperature 0.3-0.7) but S
 - Developed over Nov 15 - Dec 6, 2025
 - Tested on development dataset before final run
 
-## Contact
 
-For questions about this implementation, please contact [Your Name] at [Your Email]
-
-## License
-
-This project is submitted for CSE 476 at Arizona State University, Fall 2024.
